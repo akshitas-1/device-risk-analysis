@@ -1,0 +1,271 @@
+{
+  "studio_id": "f3c928ff-b8e4-432c-b2e2-8a7d1b88e291",
+  "version": "latest",
+  "project": "1666f059-2794-4ec2-a73c-fef4cbbedfde",
+  "_id": "1666f059-2794-4ec2-a73c-fef4cbbedfde_-_f3c928ff-b8e4-432c-b2e2-8a7d1b88e291_-_latest",
+  "in_marketplace": false,
+  "insert_date_": "2026-03-07T18:39:49.948Z",
+  "update_date_": "2026-03-07T23:22:24.741Z",
+  "is_hidden": false,
+  "machine_user_id": "79e4bacd-cd11-4ec1-a255-527a818d1f2d",
+  "creator_user_id": "3a1e1cdb-4f7c-44ed-9664-a24c0adf7e49",
+  "creator_first_name": "Akshita",
+  "creator_last_name": "Sharma",
+  "publicly_triggerable": true,
+  "public": false,
+  "metadata": {
+    "last_run_date": "2026-03-07T22:49:58.956Z"
+  },
+  "active_version_id": "2487f34c-e10f-4bcd-a6c9-8d07f90a0eaa",
+  "owner_user_id": "3a1e1cdb-4f7c-44ed-9664-a24c0adf7e49",
+  "title": "[Final] Device Risk Analysis & Notification",
+  "description": "Automatically analyzes device failure risk, calculates financial impact, notifies manager and customer, assigns engineer, creates calendar block, and logs the maintenance record. Click Run tool to execute the full workflow.",
+  "transformations": {
+    "steps": [
+      {
+        "name": "device_data",
+        "transformation": "retrieve_data",
+        "params": {
+          "filter_type": "and",
+          "raw_filters": [
+            {}
+          ],
+          "page_size": 1000,
+          "knowledge_set": "knowledge:device_failure_dataset_csv"
+        },
+        "display_name": "device_data"
+      },
+      {
+        "name": "customer_data",
+        "transformation": "retrieve_data",
+        "params": {
+          "filter_type": "and",
+          "raw_filters": [
+            {}
+          ],
+          "page_size": 1000,
+          "knowledge_set": "knowledge:customers_sla_xlsx"
+        },
+        "display_name": "customer_data"
+      },
+      {
+        "name": "incident_data",
+        "transformation": "retrieve_data",
+        "params": {
+          "filter_type": "and",
+          "raw_filters": [
+            {}
+          ],
+          "page_size": 1000,
+          "knowledge_set": "knowledge:incidency_history_xlsx"
+        },
+        "display_name": "incident_data"
+      },
+      {
+        "name": "engineer_availability",
+        "transformation": "retrieve_data",
+        "params": {
+          "filter_type": "and",
+          "raw_filters": [
+            {}
+          ],
+          "page_size": 10,
+          "knowledge_set": "knowledge:engineer_availability"
+        },
+        "display_name": "engineer_availability"
+      },
+      {
+        "name": "python",
+        "transformation": "python_code_transformation",
+        "params": {
+          "code": "import pandas as pd\nfrom datetime import datetime\n\nPREVENTIVE_ACTION_FIXED_COST = 3000\nFAILURE_PROB_THRESHOLD = 0.85\n\ndf_devices   = pd.DataFrame(device_data['data'])\ndf_customers = pd.DataFrame(customer_data['data'])\ndf_incidents = pd.DataFrame(incident_data['data'])\n\ndf_devices.columns   = df_devices.columns.str.strip().str.lower().str.replace(\"-\", \"_\").str.replace(\" \", \"_\")\ndf_customers.columns = df_customers.columns.str.strip().str.lower().str.replace(\"-\", \"_\").str.replace(\" \", \"_\")\ndf_incidents.columns = df_incidents.columns.str.strip().str.lower().str.replace(\"-\", \"_\").str.replace(\" \", \"_\")\n\n# Filter >= 0.85\ndf_high_risk = df_devices[df_devices[\"failure_probability\"] >= FAILURE_PROB_THRESHOLD][\n    [\"device_id\", \"device_type\", \"failure_probability\"]\n].copy()\n\n# Join with customers\ndf_merged = df_high_risk.merge(\n    df_customers[[\"device_id\", \"customer_name\", \"revenue\", \"sla_hours\"]],\n    on=\"device_id\",\n    how=\"inner\"\n)\ndf_merged.rename(columns={\"revenue\": \"revenue_per_hour\"}, inplace=True)\n\n# Round to nearest 0.1 to match incident buckets\ndf_merged[\"failure_prob_rounded\"]    = (df_merged[\"failure_probability\"] * 10).round() / 10\ndf_incidents[\"failure_prob_rounded\"] = df_incidents[\"failure_probability\"]\n\n# Join with incidents\ndf_final = df_merged.merge(\n    df_incidents[[\"device_type\", \"failure_prob_rounded\", \"unplanned_downtime_hours\", \"planned_downtime_hours\"]],\n    on=[\"device_type\", \"failure_prob_rounded\"],\n    how=\"left\"\n)\n\n# Calculations\ndf_final[\"downtime_rev_loss\"]                  = df_final[\"unplanned_downtime_hours\"] * df_final[\"revenue_per_hour\"]\nsla_excess                                     = (df_final[\"unplanned_downtime_hours\"] - df_final[\"sla_hours\"]).clip(lower=0)\ndf_final[\"sla_penalty\"]                        = sla_excess * df_final[\"failure_probability\"] * df_final[\"revenue_per_hour\"]\ndf_final[\"expected_cost_of_inaction\"]          = df_final[\"sla_penalty\"] + df_final[\"downtime_rev_loss\"]\ndf_final[\"expected_cost_of_preventive_action\"] = df_final[\"planned_downtime_hours\"] * df_final[\"revenue_per_hour\"] + PREVENTIVE_ACTION_FIXED_COST\ndf_final[\"net_benefit\"]                        = df_final[\"expected_cost_of_inaction\"] - df_final[\"expected_cost_of_preventive_action\"]\n\nper_device = df_final[[\n    \"device_id\", \"device_type\", \"customer_name\",\n    \"failure_probability\", \"revenue_per_hour\", \"sla_hours\",\n    \"unplanned_downtime_hours\", \"planned_downtime_hours\",\n    \"downtime_rev_loss\", \"sla_penalty\",\n    \"expected_cost_of_inaction\",\n    \"expected_cost_of_preventive_action\",\n    \"net_benefit\"\n]].to_dict(orient=\"records\")\n\ntotals = {\n    \"total_downtime_rev_loss\":       df_final[\"downtime_rev_loss\"].sum(),\n    \"total_sla_penalty\":             df_final[\"sla_penalty\"].sum(),\n    \"total_cost_of_inaction\":        df_final[\"expected_cost_of_inaction\"].sum(),\n    \"total_cost_of_prevention\":      df_final[\"expected_cost_of_preventive_action\"].sum(),\n    \"total_net_benefit\":             df_final[\"net_benefit\"].sum()\n}\n\nlog_record = {\n    \"timestamp\":          datetime.utcnow().strftime(\"%Y-%m-%d %H:%M:%S\"),\n    \"device_id\":          df_final[\"device_id\"].iloc[0],\n    \"customer_name\":      df_final[\"customer_name\"].iloc[0],\n    \"engineer_assigned\":  \"James Carter\",\n    \"maintenance_date\":   \"2026-03-21\",\n    \"cost_of_inaction\":   round(df_final[\"expected_cost_of_inaction\"].sum(), 2),\n    \"cost_of_prevention\": round(df_final[\"expected_cost_of_preventive_action\"].sum(), 2),\n    \"net_benefit\":        round(df_final[\"net_benefit\"].sum(), 2),\n    \"decision\":           \"Approved\"\n}\n\nreturn {\n    \"per_device\":             per_device,\n    \"totals\":                 totals,\n    \"high_risk_device_count\": len(df_final),\n    \"log_record\":             log_record\n}",
+          "long_output_mode": false,
+          "num_gpus": "0",
+          "num_cpus": "1",
+          "memory": 512,
+          "timeout": 600,
+          "raise_error": "Error with Full Traceback",
+          "enable_sandbox_fallback": true,
+          "packages": [
+            "pandas"
+          ]
+        }
+      },
+      {
+        "name": "llm",
+        "transformation": "prompt_completion",
+        "params": {
+          "prompt": "You are a device risk analyst. Create a professional HTML email for a manager requesting approval for preventive maintenance.\n\nRisk Analysis Data:\n\n{{python.transformed}}\n\nEngineer Availability Data:\n\n{{engineer_availability.data}}\n\nCustomer Data\n\n{{customer_data.data}}\n\nFormat the email as clean HTML with inline CSS containing these sections:\n\n1. Heading: \"Device Risk Alert - Preventive Maintenance Approval Required\"\n\n2. Executive Summary paragraph (2-3 sentences summarising the risk and recommendation)\n\n3. Risk Analysis Table with columns:\n\nDevice ID | Device Type | Unplanned Downtime (hrs) | Cost of Inaction | Cost of Prevention | Net Benefit\n\n4. Affected Customer:\n\nA clearly visible line stating \"Affected Customer: [customer name from the risk analysis data]\"\n\n5. Engineer Availability Table with columns:\n\nEngineer Name | Email | Available Date 1 | Available Date 2 | Available Date 3\n\n6. Action Required section:\n\n\"Please reply to this email with:\n\n- The name of the engineer you wish to assign\n\n- Your preferred maintenance date from their availability\"\n\nUse a clean professional font, light grey table header backgrounds (#f2f2f2), proper padding (8px) and borders (1px solid #ddd) on all tables. Do not use markdown. Return only the HTML body content, no head or html tags.",
+          "model": "relevance-cost-optimized",
+          "strip_linebreaks": false,
+          "temperature": 0,
+          "split_and_map": false,
+          "stream": false,
+          "parallel_tool_calls": false
+        },
+        "output": {
+          "answer": "{{answer}}"
+        },
+        "display_name": "email_manager_prompt"
+      },
+      {
+        "name": "send_email_outlook",
+        "transformation": "send_email_outlook",
+        "params": {
+          "oauth_account_id": "827f9a71-5420-432b-8a22-79d3265d1b19",
+          "to": [
+            "akshitas01@outlook.com"
+          ],
+          "subject": "Action Required: Device Risk Alert - Preventive Maintenance Approval",
+          "body": "{{llm.answer}}"
+        },
+        "display_name": "email_manager"
+      },
+      {
+        "name": "customer_email_body",
+        "transformation": "prompt_completion",
+        "params": {
+          "prompt": "You are a professional communications assistant.\n\nCustomer Name: {{python.transformed}}\n\nDevice ID: {{python.transformed}}\n\nScheduled Maintenance Time: 21 Mar 2026 9:00 AM\n\nWrite a short professional email to notify the customer about scheduled preventive maintenance. Requirements:\n\n- Address the customer by name\n\n- Mention the device ID\n\n- Mention the scheduled maintenance time\n\n- Explain that the maintenance is proactive and intended to maintain system reliability\n\n- Do NOT mention internal failure probabilities or internal analysis\n\n- Keep the email concise (4-5 sentences)\n\n- Use a professional tone\n\n- Return only the email body as plain HTML, no head or html tags",
+          "model": "relevance-cost-optimized",
+          "strip_linebreaks": false,
+          "temperature": 0,
+          "split_and_map": false,
+          "stream": false,
+          "parallel_tool_calls": false
+        },
+        "output": {
+          "answer": "{{answer}}"
+        },
+        "display_name": "customer_email_body"
+      },
+      {
+        "name": "send_email_outlook_1",
+        "transformation": "send_email_outlook",
+        "params": {
+          "oauth_account_id": "b98937fd-6f69-4af8-81e1-846ec052d1be",
+          "to": [
+            "customer1-relevance@outlook.com"
+          ],
+          "subject": "Scheduled Preventive Maintenance Notice - Device D3750",
+          "body": "{{customer_email_body.answer}}"
+        }
+      },
+      {
+        "name": "engineer_email_body",
+        "transformation": "prompt_completion",
+        "params": {
+          "prompt": "You are a professional communications assistant.\n\nThe following device has been flagged for preventive maintenance:\n\n{{python.transformed}}\n\nWrite a short professional HTML email to notify the assigned engineer James Carter about their maintenance assignment.\n\nRequirements:\n\n- Address the engineer by name (James Carter)\n\n- Mention the device ID (D3750)\n\n- Mention the affected customer name (Test Customer)\n\n- Mention the scheduled maintenance date as 21 Mar 2026 at 9:00 AM\n\n- Explain this is a preventive maintenance task identified by predictive monitoring\n\n- Mention that full device technical details will be shared separately\n\n- Include a line asking the engineer to confirm receipt of this email\n\n- Keep the email concise (4-5 sentences)\n\n- Professional tone\n\n- Return only the HTML email body, no head or html tags",
+          "model": "relevance-cost-optimized",
+          "strip_linebreaks": false,
+          "temperature": 0,
+          "split_and_map": false,
+          "stream": false,
+          "parallel_tool_calls": false
+        },
+        "output": {
+          "answer": "{{answer}}"
+        },
+        "display_name": "engineer_email_body"
+      },
+      {
+        "name": "send_email_outlook_2",
+        "transformation": "send_email_outlook",
+        "params": {
+          "oauth_account_id": "3092fc6f-851d-4971-9f21-7c3f69e07271",
+          "to": [
+            "jamesCarter-relevance@outlook.com"
+          ],
+          "subject": "Maintenance Assignment - Device D3750 - 21 Mar 2026",
+          "body": "{{engineer_email_body.answer}}"
+        }
+      },
+      {
+        "name": "generate_ics",
+        "transformation": "python_code_transformation",
+        "params": {
+          "code": "from datetime import datetime\n\n# Event details\nstart_dt = \"20260321T090000\"\nend_dt   = \"20260321T110000\"\nnow      = datetime.utcnow().strftime(\"%Y%m%dT%H%M%SZ\")\n\nics_content = f\"\"\"BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Device Risk Analysis//EN\nMETHOD:REQUEST\nBEGIN:VEVENT\nUID:maintenance-D3750-{now}\nDTSTAMP:{now}\nDTSTART:{start_dt}\nDTEND:{end_dt}\nSUMMARY:Preventive Maintenance - Device D3750 - Test Customer\nDESCRIPTION:Preventive maintenance for Device D3750 assigned to James Carter. This activity is scheduled to reduce the risk of future service disruption identified by predictive monitoring.\nORGANIZER:mailto:jamesCarter-relevance@outlook.com\nATTENDEE;RSVP=TRUE:mailto:james.carter@outlook.com\nLOCATION:On-site\nSTATUS:CONFIRMED\nEND:VEVENT\nEND:VCALENDAR\"\"\"\n\nreturn {\n    \"ics_content\": ics_content,\n    \"filename\": \"maintenance_D3750.ics\"\n}",
+          "long_output_mode": false,
+          "num_gpus": "0",
+          "num_cpus": "1",
+          "memory": 512,
+          "timeout": 600,
+          "raise_error": "Error with Full Traceback",
+          "enable_sandbox_fallback": true
+        },
+        "display_name": "generate_ics"
+      },
+      {
+        "name": "trigger_calendar_make",
+        "transformation": "api_call",
+        "params": {
+          "method": "POST",
+          "url": "https://hook.us2.make.com/t1rb2r5co3o47596uxg2kg9c5p7al6qn",
+          "body": "{\n\n  \"device_id\": \"D3750\",\n\n  \"customer_name\": \"Test Customer\",\n\n  \"engineer_name\": \"James Carter\",\n\n  \"engineer_email\": \"james.carter@outlook.com\",\n\n  \"maintenance_date\": \"2026-03-21\",\n\n  \"start_time\": \"2026-03-21T09:00:00\",\n\n  \"end_time\": \"2026-03-21T11:00:00\",\n\n  \"description\": \"Preventive maintenance for Device D3750 assigned to James Carter.\"\n\n}",
+          "headers": {
+            "Content-Type": "application/json"
+          }
+        },
+        "output": {
+          "response_body": "{{response_body}}",
+          "status": "{{status}}"
+        },
+        "display_name": "trigger_calendar_make"
+      },
+      {
+        "name": "insert_knowledge_data",
+        "transformation": "bulk_update",
+        "params": {
+          "chunk_and_vectorize_on_upload": false,
+          "clean_field_names": true,
+          "ingest_in_background": true,
+          "dataset_id": "knowledge:maintenance_log",
+          "documents": "{{python.transformed.log_record}}"
+        }
+      }
+    ]
+  },
+  "params_schema": {
+    "properties": {
+      "dataset_id": {
+        "metadata": {
+          "is_frontend_required": false,
+          "api_selector_placeholder": "Select Option...",
+          "hidden": false,
+          "relevance_only": false,
+          "advanced": false,
+          "dont_substitute": false
+        },
+        "order": 1,
+        "type": "string",
+        "title": "Knowledge set",
+        "description": "The knowledge set to insert data to.",
+        "default": "maintenance_log"
+      }
+    },
+    "required": [
+      "dataset_id"
+    ],
+    "type": "object"
+  },
+  "output_schema": {},
+  "state_mapping": {
+    "device_data": "steps.device_data.output",
+    "customer_data": "steps.customer_data.output",
+    "incident_data": "steps.incident_data.output",
+    "python": "steps.python.output",
+    "llm": "steps.llm.output",
+    "send_email_outlook": "steps.send_email_outlook.output",
+    "engineer_availability": "steps.engineer_availability.output",
+    "send_email_outlook_1": "steps.send_email_outlook_1.output",
+    "customer_email_body": "steps.customer_email_body.output",
+    "send_email_outlook_2": "steps.send_email_outlook_2.output",
+    "engineer_email_body": "steps.engineer_email_body.output",
+    "generate_ics": "steps.generate_ics.output",
+    "trigger_calendar_make": "steps.trigger_calendar_make.output",
+    "insert_knowledge_data": "steps.insert_knowledge_data.output",
+    "dataset_id": "params.dataset_id"
+  },
+  "params": {
+    "dataset_id": "maintenance_log"
+  }
+}

@@ -1,0 +1,41 @@
+customer_name,device_id,revenue_per_hour,sla_hours
+Acme Retail,D8359,8450,1.5
+Sunrise Health,D4923,8125,1.6
+BlueWave Services,D5315,4890,0.7
+GreenLeaf Foods,D1771,7340,1.4
+NorthStar Logistics,D2084,5580,1.9
+Acme Retail,D6820,9230,0.8
+BlueWave Services,D3045,6725,1.2
+BlueWave Services,D2638,5210,1.5
+Sunrise Health,D2964,7880,1.0
+NorthStar Logistics,D8973,4320,1.7
+Acme Retail,D9856,9550,0.9
+UrbanNest,D2612,6990,1.3
+GreenLeaf Foods,D6413,5785,1.8
+Prime Auto,D6107,6450,1.1
+Prime Auto,D1183,6150,1.3
+UrbanNest,D9245,7990,1.6
+BlueWave Services,D7314,6880,0.9
+NorthStar Logistics,D5876,7210,1.8
+Sunrise Health,D4121,5595,1.1
+Acme Retail,D3608,9045,1.4
+GreenLeaf Foods,D1653,6380,1.9
+UrbanNest,D3143,4765,0.6
+Prime Auto,D5333,8670,1.2
+GreenLeaf Foods,D8806,4620,1.6
+Acme Retail,D7198,8310,0.7
+Prime Auto,D5640,6985,1.4
+BlueWave Services,D3482,7525,1.9
+UrbanNest,D1574,5890,1.0
+Sunrise Health,D8037,6645,1.5
+NorthStar Logistics,D6901,5410,1.2
+Acme Retail,D4528,9720,1.7
+GreenLeaf Foods,D2769,4835,0.8
+Sunrise Health,D9180,8840,1.7
+GreenLeaf Foods,D8456,6915,0.8
+Acme Retail,D7822,5280,1.2
+Prime Auto,D6674,7430,1.5
+BlueWave Services,D5019,6195,1.1
+UrbanNest,D3765,8560,1.8
+Sunrise Health,D2297,5940,0.9
+NorthStar Logistics,D9431,7775,1.3

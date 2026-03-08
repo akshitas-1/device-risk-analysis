@@ -1,0 +1,9 @@
+{
+  "subject": "Preventive Maintenance - Device D3750 | Bank of Seattle | 21 Mar 2026",
+  "body": "Preventive maintenance scheduled for Device D3750 at Bank of Seattle.\n\nEngineer James Carter will perform the maintenance on 21 March 2026 from 9:00 AM to 11:00 AM.\n\nThis calendar event has been automatically created by the Device Risk Analysis Pipeline.",
+  "start": "2026-03-21T09:00:00",
+  "end": "2026-03-21T11:00:00",
+  "attendees": [
+    "james.carter@outlook.com"
+  ]
+}
