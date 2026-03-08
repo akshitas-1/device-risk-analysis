@@ -86,7 +86,7 @@ This pipeline automatically:
 | Data Storage | Relevance AI Knowledge Tables |
 | Calculations | Python (pandas) |
 | AI/LLM | Claude (via Relevance AI) |
-| Email (Manager/Customer) | Gmail API (via Relevance AI) |
+| Email (Manager/Customer) | Outlook API (via Relevance AI) |
 | Email (Engineer) | Microsoft Outlook (via Relevance AI) |
 | Calendar | Microsoft Outlook Calendar via Make.com Webhook |
 | Automation | [Make.com](https://make.com) |
